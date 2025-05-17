@@ -1,1 +1,1 @@
-# coffe-loyalty-system
+# coffee-loyalty-system
