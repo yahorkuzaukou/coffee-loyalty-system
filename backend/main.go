@@ -8,18 +8,18 @@ import (
 	"syscall"
 	"time"
 
-	"coffee-loyalty-system/cmd"
+	"coffee-loyalty-system/cmd/server"
 )
 
 func main() {
-	server, err := cmd.NewServer()
+	srv, err := server.NewServer()
 	if err != nil {
 		log.Fatalf("Failed to create server: %v", err)
 	}
 
 	serverErrors := make(chan error, 1)
 	go func() {
-		serverErrors <- server.ListenAndServe()
+		serverErrors <- srv.ListenAndServe()
 	}()
 
 	quit := make(chan os.Signal, 1)
@@ -33,7 +33,7 @@ func main() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
-		if err := server.Shutdown(ctx); err != nil {
+		if err := srv.Shutdown(ctx); err != nil {
 			log.Fatalf("Failed to shutdown server: %v", err)
 		}
 	}

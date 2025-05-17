@@ -1,7 +1,8 @@
-package cmd
+package server
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -31,6 +32,28 @@ func loggingMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+func connectWithRetry(cfg storage.Config, maxRetries int) (storage.Database, error) {
+	var db storage.Database
+	var err error
+	backoff := time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		db, err = storage.NewDatabase(cfg)
+		if err == nil {
+			return db, nil
+		}
+
+		log.Printf("Failed to connect to database (attempt %d/%d): %v", i+1, maxRetries, err)
+		if i < maxRetries-1 {
+			log.Printf("Retrying in %v...", backoff)
+			time.Sleep(backoff)
+			backoff *= 2 // exponential backoff
+		}
+	}
+
+	return nil, fmt.Errorf("failed to connect to database after %d attempts: %w", maxRetries, err)
+}
+
 func NewServer(dbOptional ...storage.Database) (*Server, error) {
 	var db storage.Database
 	if len(dbOptional) > 0 && dbOptional[0] != nil {
@@ -44,8 +67,9 @@ func NewServer(dbOptional ...storage.Database) (*Server, error) {
 			DBName:   getEnvOrDefault("DB_NAME", "coffee_loyalty"),
 			SSLMode:  getEnvOrDefault("DB_SSLMODE", "disable"),
 		}
+
 		var err error
-		db, err = storage.NewDatabase(cfg)
+		db, err = connectWithRetry(cfg, 5) // Try 5 times with exponential backoff
 		if err != nil {
 			return nil, err
 		}
